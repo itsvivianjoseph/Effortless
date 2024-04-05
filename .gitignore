@@ -1,0 +1,32 @@
+# Python
+*.pyc
+__pycache__/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Dependency directories
+.idea/
+.node_modules/
+.pip_cache/
+.vscode/
+
+# IDE files
+*.swp
+*.swo
+*.swn
+*.swm
+*.sublime-workspace
+
+# Ignore the .env file (contains sensitive information)
+.env
