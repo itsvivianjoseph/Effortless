@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import requests
+import schedule
+import time
 
 load_dotenv()
 
@@ -44,60 +46,66 @@ def construct_prompt(row):
     return prompt
 
 
-def generate_rec(prompt,API_TOKEN):
-  API_URL = "https://api-inference.huggingface.co/models/google/gemma-7b-it"
-  headers = {"Authorization": f"Bearer {API_TOKEN}"}
+def generate_rec(prompt, API_TOKEN):
+    API_URL = "https://api-inference.huggingface.co/models/google/gemma-7b-it"
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-  payload = {
-      "inputs" : prompt,
-      "parameters" : { "max_new_tokens" : 1000 }
-  }
+    payload = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 1000}
+    }
 
-  response = requests.post(API_URL, headers=headers, json=payload)
-  return response.json()
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
 
+def job():
+    req_count = 200
+    total_count = len(tokens_array) * req_count
 
-req_count = 200
-total_count = len(tokens_array) * req_count
+    idx = 0
+    API_TOKEN = tokens_array[idx]
 
-idx = 0
-API_TOKEN = tokens_array[idx]
+    curr_count = 0
+    count_sum = 0
 
-curr_count = 0
-count_sum = 0
+    for index, row in df.iterrows():
 
-for index, row in df.iterrows():
-
-    if count_sum >= total_count:
-      print(f'completed')
-      break
-
-    if curr_count == req_count:
-        idx += 1
-        curr_count = 0
-        count_sum += req_count
-
-        if idx >= len(tokens_array):
-            print("All tokens used, exiting loop")
+        if count_sum >= total_count:
+            print(f'completed')
             break
 
-        print(f'token change from {API_TOKEN} to {tokens_array[idx]}')
-        API_TOKEN = tokens_array[idx]
+        if curr_count == req_count:
+            idx += 1
+            curr_count = 0
+            count_sum += req_count
 
-    if pd.isna(row['recommendations']) or row['recommendations'].strip() == '':
-        prompt = construct_prompt(row)
-        recommendations = generate_rec(prompt,API_TOKEN)
+            if idx >= len(tokens_array):
+                print("All tokens used, exiting loop")
+                break
 
-        generated_text = recommendations[0]['generated_text']
-        start_index = generated_text.find(prompt)
-        clean_generated_text = generated_text[start_index + len(prompt):].strip()
+            print(f'token change from {API_TOKEN} to {tokens_array[idx]}')
+            API_TOKEN = tokens_array[idx]
 
-        df.at[index, 'recommendations'] = clean_generated_text
+        if pd.isna(row['recommendations']) or row['recommendations'].strip() == '':
+            prompt = construct_prompt(row)
+            recommendations = generate_rec(prompt, API_TOKEN)
 
-        global_index = index
-        curr_count += 1
+            generated_text = recommendations[0]['generated_text']
+            start_index = generated_text.find(prompt)
+            clean_generated_text = generated_text[start_index + len(prompt):].strip()
 
-        print(f'currently processing row {global_index} , current count {curr_count} , current token {API_TOKEN}')
+            df.at[index, 'recommendations'] = clean_generated_text
 
-    
-df.to_csv('./dataset_creation.csv', index=False)
+            global_index = index
+            curr_count += 1
+
+            print(f'currently processing row {global_index} , current count {curr_count} , current token {API_TOKEN}')
+
+    df.to_csv('./dataset_creation.csv', index=False)
+
+# Schedule the job to run every 2 hours
+schedule.every(2).hours.do(job)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
